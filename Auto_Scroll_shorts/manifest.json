@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Auto-Advance (YouTube Shorts + Goku Series)",
+  "version": "1.1.0",
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*", "https://goku.sx/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

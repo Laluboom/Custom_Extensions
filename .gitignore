@@ -1,0 +1,35 @@
+# Extension build/package output
+dist/
+build/
+web-ext-artifacts/
+*.zip
+*.crx
+*.xpi
+
+# Environment files and local secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Dependency folders and generated data
+node_modules/
+outputs/
+output/
+data/
+exports/
+tmp/
+temp/
+*.log
+
+# Editor, OS, and local workspace files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo

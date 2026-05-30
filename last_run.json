@@ -1,0 +1,24 @@
+{
+  "date": "2026-05-29",
+  "run_attempted": true,
+  "run_succeeded": "syntax_only",
+  "run_status": "All 7 JS files passed node --check syntax validation. Browser runtime testing not possible from CLI.",
+  "syntax_check": {
+    "Auto_Scroll_shorts/content.js": "OK",
+    "Ctrl_Click_New_Tab/content.js": "OK",
+    "playback_speed_controller/content.js": "OK",
+    "playback_speed_controller/background.js": "OK",
+    "Waitlist Display Chrome/content.js": "OK",
+    "Waitlist Display Chrome/service_worker.js": "OK",
+    "Waitlist Display Firefox/content.js": "OK"
+  },
+  "extensions": {
+    "playback_speed_controller": { "manifest_version": 3, "version": "1.0", "status": "complete" },
+    "Auto_Scroll_shorts": { "manifest_version": 3, "version": "1.1.0", "status": "complete" },
+    "Ctrl_Click_New_Tab": { "manifest_version": 3, "version": "1.0.0", "status": "complete" },
+    "Waitlist Display Chrome": { "manifest_version": 3, "version": "1.0.0", "status": "complete" },
+    "Waitlist Display Firefox": { "manifest_version": 3, "version": "1.1", "status": "complete" },
+    "Remove_Sponsors": { "status": "empty stub — no files" }
+  },
+  "notes": "Chrome and Firefox Waitlist Display versions have diverged. playback_speed_controller uses polling instead of MutationObserver. Remove_Sponsors is an empty directory."
+}

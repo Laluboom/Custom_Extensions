@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Playback Speed Controller",
+  "version": "1.0",
+  "description": "Control video speed with custom keys because YouTube is a bastard to make that a premium feature.",
+  "action": {
+    "default_title": "Toggle Speed Control"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "permissions": ["activeTab", "scripting", "storage"],
+  "icons": {
+    "128": "playback.png"
+  }
+}

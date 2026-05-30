@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Ctrl Click Opens New Tab",
+  "version": "1.0.0",
+  "description": "Force Ctrl + Left Click to open links in a new tab, including SPA-routed links.",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

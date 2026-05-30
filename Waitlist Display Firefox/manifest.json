@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Queue Wait in Tab Title",
+  "version": "1.1",
+  "description": "Shows queue estimated wait number in the tab title for a specific site only.",
+  "host_permissions": [
+    "https://www.mindvideo.ai/text-to-video/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://www.mindvideo.ai/text-to-video/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "queue-wait-tab-title@your-domain.com"
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Queue Wait in Tab Title",
+  "version": "1.0.0",
+  "description": "Shows queue estimated wait number in the tab title for a specific site only.",
+  "permissions": [],
+  "host_permissions": [
+    "https://www.mindvideo.ai/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://www.mindvideo.ai/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "service_worker.js"
+  }
+}
