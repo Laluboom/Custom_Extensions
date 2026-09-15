@@ -1,47 +1,60 @@
 # Reference — Custom Extensions
 
-_Last refreshed: 2026-05-29_
+_Last refreshed: 2026-09-15_
 
 ## Purpose
-Suite of personal browser utility extensions (Chrome/Firefox, Manifest V3) for YouTube, streaming, and general browsing automation.
+Five personal browser extensions, vanilla JS, no build step, no dependencies. Each folder is
+a loadable unpacked extension. ~1000 lines of JS total.
 
-## Stack
-- JavaScript (vanilla, no build step)
-- Chrome Extension Manifest V3 (`chrome.storage.local`, `chrome.scripting`, service workers)
-- Firefox WebExtension API (Gecko-compatible variant for Waitlist Display)
+## Install
+**Chrome/Edge:** `chrome://extensions` → Developer mode → Load unpacked → pick the folder.
+**Firefox:** `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → pick
+`Waitlist_Display_Firefox/manifest.json`. (Temporary add-ons are dropped on Firefox restart.)
 
-## Installation (no build step needed)
-**Chrome/Edge:** `chrome://extensions` → Developer mode → Load unpacked → select the extension sub-folder  
-**Firefox:** `about:debugging` → Load Temporary Add-on → select `manifest.json`
+No `npm install`, no test suite, nothing to run from a terminal. `node --check` passes on all
+7 JS files; anything beyond syntax needs a browser.
 
 ---
 
 ## Extensions
 
-### `playback_speed_controller`
-Controls YouTube video playback speed with a draggable floating panel. Hotkeys `[` / `]` adjust by 0.1x. Speed and panel position persisted via `chrome.storage.local`. Toolbar icon toggles panel visibility.
-- Files: `manifest.json`, `content.js`, `background.js`, `playback.png`
+### `playback_speed_controller` — MV3, v1.0, YouTube
+Draggable glass panel: number input (0.1–16x), slider (0.25–4x), four preset pills, `[` / `]`
+hotkeys. Speed, panel position and visibility persist in `chrome.storage.local`. Toolbar
+click toggles the panel via `background.js` → `sendMessage`, with `chrome.scripting`
+re-injection as a fallback. Panel is re-created by a 1 s `setInterval` (`content.js:328`).
+Known: no toolbar `default_icon`; the `"128"` icon is a 24×24 file; no double-injection guard.
 
-### `Auto_Scroll_shorts`
-Auto-advances YouTube Shorts when progress ≥ 99% and skips sponsored shorts. Also advances episodes on `goku.sx` series pages via video `ended` event + MutationObserver fallback. Toggle: `Ctrl+Shift+Y`.
-- Files: `manifest.json`, `content.js`
+### `Auto_Scroll_shorts` — MV3, v1.1.0, YouTube Shorts + goku.sx
+Shorts: reads the seek slider's `aria-valuenow`, dispatches `ArrowDown` at ≥99%, skips
+sponsored shorts immediately. Goku: `ended` / near-end `timeupdate` listeners, a
+`postMessage` sniffer, a MutationObserver re-binder, and a 1300 ms overlay-button poll.
+`Ctrl+Shift+Y` toggles; state in `chrome.storage.local`. Largest file here (312 lines).
+Known: the overlay poll clicks on arrival, not at end-of-video (`content.js:284`).
+**`goku.sx` did not respond from this machine on 2026-09-15** (connect timeout) — roughly
+half this file targets a site that may no longer be reachable.
 
-### `Ctrl_Click_New_Tab`
-Forces `Ctrl+Left Click` to open links in a new tab on all sites, including SPAs that intercept clicks and break the default browser behaviour. Handles `<a href>`, `data-href`, `data-url`, `formaction`, and `onclick` patterns.
-- Files: `manifest.json`, `content.js`
+### `Ctrl_Click_New_Tab` — MV3, v1.0.0, `<all_urls>`
+Capture-phase click handler that re-implements Ctrl+Click for SPA links: reads `href`,
+`data-href`, `data-url`, `formaction`, and three `onclick` string patterns, then
+`window.open(..., "_blank")` + `stopImmediatePropagation`. 79 lines, the tidiest thing here.
+Known: it also intercepts plain `<a href>`, which the browser already handled — that turns
+background-tab Ctrl+Click into a foreground focus steal on every site.
 
-### `Waitlist Display Chrome`
-Scrapes `mindvideo.ai` for "Est. wait: N person" text and shows it in the tab title (`⏳ N`) plus a floating bottom-right badge. MutationObserver + 1500ms polling.
-- Files: `manifest.json`, `content.js`, `service_worker.js`
+### `Waitlist_Display_Chrome` / `Waitlist_Display_Firefox` — MV3, v1.0.0 / v1.1
+Scrape `mindvideo.ai` for `Est. wait: N person` and surface N in the tab title. Chrome adds a
+floating bottom-right badge; Firefox is title-only but has the better scraper (debounced
+observer, `person|people`, leaf-node skip, 5 s fallback). Two independently-maintained copies
+that have drifted apart in regex, title format and URL scope — see `todo.md` item 4.
+Known: the Chrome badge write at `content.js:88` re-triggers its own observer, which is an
+unbounded loop while a queue is showing. **`mindvideo.ai` is live** (200, 2026-09-15).
 
-### `Waitlist Display Firefox`
-Firefox port of the above — title-only update (no badge), with debounced MutationObserver and a performance skip for container elements with >3 children. 5000ms fallback.
-- Files: `manifest.json`, `content.js`
-
-### `Remove_Sponsors` _(stub)_
-Empty directory. Placeholder for a future sponsor-segment skipping extension.
+### `Remove_Sponsors`
+Does not exist. README still describes it; it was never committed.
 
 ---
 
-## Run Status (2026-05-29)
-All 7 JS files passed `node --check` syntax validation. Extensions cannot be run from CLI — must be loaded into a browser. No runtime errors confirmed (would require manual browser testing).
+## State
+Working personal toolkit, no commits since 2026-05-30. Two confirmed bugs (waitlist observer
+loop, Ctrl+Click anchor hijack) and a stale README stand between this and finished.
+See `todo.md`.
