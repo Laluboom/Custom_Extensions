@@ -4,7 +4,10 @@
   "version": "1.0",
   "description": "Control video speed with custom keys because YouTube is a bastard to make that a premium feature.",
   "action": {
-    "default_title": "Toggle Speed Control"
+    "default_title": "Toggle Speed Control",
+    "default_icon": {
+      "24": "playback.png"
+    }
   },
   "background": {
     "service_worker": "background.js"
@@ -18,6 +21,6 @@
   ],
   "permissions": ["activeTab", "scripting", "storage"],
   "icons": {
-    "128": "playback.png"
+    "24": "playback.png"
   }
 }
