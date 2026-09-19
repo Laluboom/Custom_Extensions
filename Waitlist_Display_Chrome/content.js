@@ -10,6 +10,16 @@
     const display = document.createElement("div");
     display.id = DISPLAY_ID;
     display.style.display = "none"; // Initially hidden
+
+    const emoji = document.createElement("span");
+    emoji.className = "emoji";
+    emoji.textContent = "⏳";
+    display.appendChild(emoji);
+    display.appendChild(document.createTextNode(" Est. Wait: "));
+
+    const waitNumber = document.createElement("strong");
+    display.appendChild(waitNumber);
+
     document.body.appendChild(display);
 
     const style = document.createElement("style");
@@ -44,19 +54,15 @@
     `;
     document.head.appendChild(style);
 
-    return display;
+    return { display, waitNumber };
   }
 
-  const displayElement = createDisplayElement();
+  const { display: displayElement, waitNumber: waitNumberElement } = createDisplayElement();
 
   // --- Logic ---
 
   function formatTitle(n) {
     return `⏳ ${n}`;
-  }
-
-  function formatDisplay(n) {
-    return `<span class="emoji">⏳</span> Est. Wait: <strong>${n}</strong>`;
   }
 
   function extractWaitNumber() {
@@ -72,6 +78,7 @@
 
   let lastTitle = document.title;
   let isDisplayVisible = false;
+  let lastRenderedN = null;
 
   function updateDisplay() {
     const n = extractWaitNumber();
@@ -85,7 +92,10 @@
       }
 
       // Update and show the on-page display
-      displayElement.innerHTML = formatDisplay(n);
+      if (n !== lastRenderedN) {
+        waitNumberElement.textContent = n;
+        lastRenderedN = n;
+      }
       if (!isDisplayVisible) {
         displayElement.style.display = "flex";
         // Force reflow before adding class to trigger transition
