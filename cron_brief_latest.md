@@ -1,68 +1,77 @@
-# Custom_Extensions — review 2026-09-15
+# Daily brief — Custom_Extensions (2026-09-27)
 
 ## What I looked at
 
-All of it — the repo is ~1000 lines of JS across five extension folders, so I read every
-source file end to end rather than skimming: both Waitlist content scripts, the 312-line
-`Auto_Scroll_shorts/content.js`, the 360-line playback panel plus its background worker, the
-79-line Ctrl+Click handler, all six manifests, and the README / reference / todo. `node --check`
-passes on all seven JS files. I also probed the two target sites: `mindvideo.ai` answers 200,
-`goku.sx` returned nothing (connect timeout — unreachable from here, which is suggestive but
-not proof it's gone).
+All 19 files, which is the whole repo: every `content.js`, both background scripts, all five
+manifests, the README, and the previous review's notes. 976 lines of vanilla JS. I also ran
+`node --check` over all 7 JS files (all pass, no syntax rot) and curled the two sites these
+extensions actually target.
 
-No commits since the folder-rename on 2026-05-30, and none of the eight items from the May
-todo list were started. That's fine for a hobby toolkit that works, but it does mean the
-previous list had gone stale in one specific way: item 3 asked me to start `Remove_Sponsors`,
-and that directory doesn't exist — it was never committed. Both the README and the old
-reference.md describe it as if it were sitting there empty.
+**No browser check.** This is five unpacked extensions with no build step, so there's no dev
+server to serve and nothing at localhost; loading MV3 extensions headlessly against
+youtube.com or mindvideo.ai would need real logged-in sessions. I verified the external
+dependencies over the network instead, which is the part that actually rots here.
 
-**I did not manage a browser check.** I tried: I built a harness page wrapping the Chrome
-waitlist script with a `MutationObserver` tick counter, intending to load it in Windows
-headless Chrome. The scratchpad is on a WSL path Chrome can't read, and I can't create a
-staging directory under `/mnt/c`. I time-boxed it and stopped. The headline finding below is
-from reading the code and the microtask-drain semantics, not from watching it happen.
+## The good news first
 
-## What I found
+Two of the five items from the 2026-09-15 list shipped and were verified: `8f99694` killed
+the Waitlist Chrome observer loop (the `lastRenderedN` guard is now at `content.js:81,95-98`)
+and `753dca6` gave the speed controller a real toolbar icon. I re-read both fixes and they
+hold — the badge's `classList`/`style` writes are attribute mutations and the observer only
+watches `childList`/`characterData`, so there's no path back into the loop. That's a genuine
+change from the last review, where nothing on the list had been touched in four months.
 
-**The Chrome waitlist badge feeds its own observer.** `Waitlist_Display_Chrome/content.js:88`
-writes `displayElement.innerHTML` unconditionally on every `updateDisplay()`. The observer at
-`:120-125` watches `document.documentElement` with `childList + subtree + characterData`, and
-the badge lives in `document.body` — so the write is a mutation the observer sees. Observer
-delivery is a microtask, and microtasks queued *during* a drain run in that same drain, so
-this never yields to the event loop. As long as "Est. wait" is on the page, the tab spins.
-The title write two lines up at `:82` is guarded by an equality check; the innerHTML write
-isn't. That asymmetry is the whole bug, and it's a five-line fix.
+## What I'm proposing, and why in this order
 
-**Ctrl_Click_New_Tab overreaches.** It's the tidiest file in the repo, but `content.js:39-40`
-matches `a[href]` *before* any of the SPA fallbacks — so ordinary links, which the browser
-already handles fine, get routed through `window.open(url, "_blank")`. Native Ctrl+Click opens
-a background tab; `window.open` focuses it. On `<all_urls>`, that means every normal Ctrl+Click
-anywhere on the web now steals focus. And `<a href="">` — a very common SPA button — falls
-through to `anchor.href`, resolves to the current page, and opens a duplicate of where you
-already are. The extension should only touch the `data-href` / `formaction` / `onclick` cases
-at `:42-54`, which is why it was written in the first place.
+**The one that matters is `Ctrl_Click_New_Tab/content.js:39-40.`** I'd flagged the
+over-firing half last time; reading it properly this time, that single `return` is wrong in
+*both* directions, and one fix settles both. It intercepts plain `<a href>` links the browser
+already handles — and since native Ctrl+Click opens a *background* tab while `window.open`
+*focuses* the new one, this extension turns every ordinary Ctrl+Click on the entire web into
+a focus steal. Meanwhile the same early return **shadows the SPA fallbacks at `:42-54`**:
+`<a href="#" onclick="location.href='/x'">`, the exact pattern this extension was written
+for, matches `a[href]`, gets `null` from `toAbsoluteUrl("#")`, and returns before the
+`onclick` extraction is ever reached. It's ~4 lines to fix and it's running on `<all_urls>`,
+so it's the highest-value change in the repo by a distance.
 
-**The Waitlist fork has drifted both directions.** Chrome's regex only matches "person", so it
-goes blank the moment the site says "2 people" — Firefox fixed that at `content.js:5` and the
-fix never came back. Firefox, meanwhile, puts a naked digit in the tab title where Chrome
-renders `⏳ N`. They also match different URL scopes. Each fork holds a fix the other lacks;
-that's the structural loose end.
+**Second, `Auto_Scroll_shorts/content.js:284`.** The overlay-button poll fires from a bare
+1300 ms interval and checks *no playback position at all* — not `currentTime`, not
+`duration`, not `ended`. It just finds a visible "Next Episode"-ish node and clicks it. The
+1200 ms debounce is shorter than the 1300 ms poll, so it never throttles anything. On a Goku
+series page that means it clicks ~1.3 s after load and chains through the series. But this
+needs a decision from you first: **`goku.sx` timed out again today** — second time in 12
+days. DNS resolves fine to Cloudflare and the stall is mid-TLS-handshake, so it's blocked
+from this machine rather than dead, and I can't tell from here whether it works for you. One
+browser tab settles it, and the answer changes the task completely: gate the poll behind
+end-of-playback if the site lives, or delete ~165 lines if it doesn't.
 
-## What I'm proposing
+**The quick win is the README.** `README.md:50` still tells you to load
+`Waitlist Display Firefox` with spaces, but `e495b44` renamed that folder to underscores back
+in May — so the single instruction a new user follows leads to a path that isn't there.
+`:33-36` documents a `Remove_Sponsors` extension that has never existed, and `:54-77` is a
+second todo list that now contradicts `todo.md`. Two control gaps are worth adding while
+you're in there: `Ctrl+Shift+Y` is the *only* way to turn auto-advance off and appears
+nowhere in the docs, and the README never says the speed panel is summoned by clicking the
+toolbar button.
 
-Two bug fixes first (waitlist loop, Ctrl+Click scope), then the 15-minute quick win — the
-speed controller has no toolbar `default_icon` even though the toolbar button is the *only*
-way to open the panel, and its `playback.png` is declared under the `"128"` key while actually
-being 24×24. Then collapse the Waitlist fork into one shared `content.js` copied into both
-manifest folders. No build script: it's two files, a Makefile would be theatre. Last, fix the
-README, which currently tells a new user to load a folder whose name changed in `e495b44`.
+**Fourth, the Waitlist fork**, now with a sharper reason than "they've drifted": Chrome's
+regex at `content.js:73` is `person`-only, so **the Chrome build silently shows nothing the
+moment the queue reads "2 people"** — which is most of the time. Firefox has handled both
+since forever at `:5`. Chrome's observer is also still undebounced, doing a full-document
+text walk per mutation on a React app. Firefox, conversely, writes a bare digit with no
+`⏳`. One shared `content.js` — Firefox's scraper plus Chrome's title format and badge —
+copied into both folders. `mindvideo.ai` answered 200 today, so this is worth fixing.
 
-I deliberately dropped the old "unified extension manager popup" idea. Five independent
-single-purpose extensions don't need a shared messaging contract — that's more architecture
-than this suite can carry. I also demoted the old top item (replace the 1 s `setInterval` with
-a MutationObserver): it's a perf nit on an otherwise-idle timer. The sharper version of that
-concern is that `background.js:9-20` re-injects `content.js` with no re-entry guard, which
-would give you two intervals and two keydown listeners — and `]` stepping speed by 0.2x.
+**Fifth**, a rough edge you've probably been tolerating: the speed panel floats over the
+YouTube *homepage*. `manifest.json:17` matches all of `*.youtube.com` with no path gate and
+`createUI()` never checks that a `<video>` exists, so it decorates search, subscriptions and
+history too. One-line early return. While in there, `createUI`'s existence check at `:180`
+sits before an `await` and the append is at `:274` — two calls landing in that window build
+two panels and register the keydown handler twice, which is why `]` would step by 0.2x.
 
-**Verdict: closer to finished than not.** Nothing has rotted, nothing needs rebuilding. Roughly
-two focused hours of fixing code that already exists, and this is done.
+## Verdict
+
+Close to finished, and actually moving now. Four of five extensions are one small fix each
+from done. The honest open question is `Auto_Scroll_shorts`: half of it targets a host I
+can't reach, and if you can't either, the right move is deleting 165 lines rather than
+debugging them.
