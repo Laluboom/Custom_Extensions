@@ -37,7 +37,10 @@
     if (!target || !(target instanceof Element)) return null;
 
     const anchor = target.closest("a[href]");
-    if (anchor) return toAbsoluteUrl(anchor.getAttribute("href") || anchor.href);
+    if (anchor) {
+      const navigable = toAbsoluteUrl(anchor.getAttribute("href"));
+      if (navigable) return null;
+    }
 
     const btn = target.closest("button, [role='button'], [onclick], [data-href], [data-url], [href], [formaction]");
     if (!btn) return null;

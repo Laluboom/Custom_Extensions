@@ -6,7 +6,7 @@ were verified by the doer. What follows is what is genuinely left._
 
 ---
 
-### 1. [BUG] The anchor branch in Ctrl_Click_New_Tab is wrong in both directions
+### 1. `[DONE 2026-09-27]` The anchor branch in Ctrl_Click_New_Tab is wrong in both directions
 
 `Ctrl_Click_New_Tab/content.js:39-40`:
 
