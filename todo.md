@@ -7,7 +7,7 @@ code and it is correct in both directions now. The README item was marked
 
 ---
 
-### 1. [BUG] The Chrome waitlist extension shows nothing once the queue says "2 people"
+### 1. `[DONE 2026-10-10]` The Chrome waitlist extension shows nothing once the queue says "2 people"
 
 `Waitlist_Display_Chrome/content.js:73`:
 

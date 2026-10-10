@@ -3,6 +3,8 @@
 
   const ORIGINAL_TITLE = document.title;
   const DISPLAY_ID = "waitlist-display-extension";
+  const WAIT_REGEX = /Est\.\s*wait:\s*(\d+)\s*(?:person|people)/i;
+  let updateTimeout = null;
 
   // --- UI & Styling ---
 
@@ -66,14 +68,29 @@
   }
 
   function extractWaitNumber() {
-    const candidates = Array.from(document.querySelectorAll("span, div, p, li"));
-    for (const el of candidates) {
+    // Quick check before expensive DOM traversal
+    if (!document.body.innerText.toLowerCase().includes("wait:")) return null;
+
+    // Focused query to find elements likely to contain the text
+    const elements = document.querySelectorAll("span, div, p, li");
+
+    for (const el of elements) {
+      // Optimization: elements with many children are likely containers, skip them to find the leaf node
+      if (el.children.length > 3) continue;
+
       const text = (el.textContent || "").trim();
-      if (!text) continue;
-      const m = text.match(/Est\.\s*wait:\s*(\d+)\s*person/i);
-      if (m && m[1]) return m[1];
+      if (!text || text.length > 100) continue;
+
+      const m = text.match(WAIT_REGEX);
+      if (m) return m[1];
     }
+
     return null;
+  }
+
+  function debouncedUpdate() {
+    if (updateTimeout) clearTimeout(updateTimeout);
+    updateTimeout = setTimeout(updateDisplay, 250);
   }
 
   let lastTitle = document.title;
@@ -127,7 +144,7 @@
   updateDisplay();
 
   // Watch for dynamic updates
-  const observer = new MutationObserver(() => updateDisplay());
+  const observer = new MutationObserver(() => debouncedUpdate());
   observer.observe(document.documentElement, {
     childList: true,
     subtree: true,

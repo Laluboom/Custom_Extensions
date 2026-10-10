@@ -28,7 +28,7 @@
 
   function updateTitle() {
     const n = extractWaitNumber();
-    const newTitle = n || ORIGINAL_TITLE;
+    const newTitle = n ? `⏳ ${n}` : ORIGINAL_TITLE;
     if (document.title !== newTitle) {
       document.title = newTitle;
     }
