@@ -1,77 +1,92 @@
-# Daily brief — Custom_Extensions (2026-09-27)
+# Daily review — Custom_Extensions (2026-10-10)
 
 ## What I looked at
 
-All 19 files, which is the whole repo: every `content.js`, both background scripts, all five
-manifests, the README, and the previous review's notes. 976 lines of vanilla JS. I also ran
-`node --check` over all 7 JS files (all pass, no syntax rot) and curled the two sites these
-extensions actually target.
+All 17 tracked files: every `content.js`, both background scripts, all five manifests, the
+README, and the three review artifacts from 2026-09-27. Then live checks — `curl` against
+`goku.sx` and both `mindvideo.ai` paths, `node --check` on all 7 JS files, and a node
+comparison of the two waitlist regexes against realistic queue strings.
 
-**No browser check.** This is five unpacked extensions with no build step, so there's no dev
-server to serve and nothing at localhost; loading MV3 extensions headlessly against
-youtube.com or mindvideo.ai would need real logged-in sessions. I verified the external
-dependencies over the network instead, which is the part that actually rots here.
+**No browser.** These are unpacked extensions with no build step and no dev server, so there
+is no localhost to serve. The two things a browser would actually settle — whether
+`mindvideo.ai` renders the queue string the way the regex expects, and whether YouTube resets
+`playbackRate` across SPA navigation — both need a logged-in session that headless Chrome
+can't stand in for. I verified what was verifiable without one.
 
-## The good news first
+## What shipped since last review
 
-Two of the five items from the 2026-09-15 list shipped and were verified: `8f99694` killed
-the Waitlist Chrome observer loop (the `lastRenderedN` guard is now at `content.js:81,95-98`)
-and `753dca6` gave the speed controller a real toolbar icon. I re-read both fixes and they
-hold — the badge's `classList`/`style` writes are attribute mutations and the observer only
-watches `childList`/`characterData`, so there's no path back into the loop. That's a genuine
-change from the last review, where nothing on the list had been touched in four months.
+`2d8b09f` fixed the `Ctrl_Click_New_Tab` anchor branch, which was the headline item. I
+re-traced all four paths against the current `content.js:39-43` rather than taking the commit
+message's word for it: plain `<a href="/page">` now returns `null` and defers to the browser
+(no more focus steal on `<all_urls>`), `<a href="#" onclick="…">` falls through to the onclick
+extractor at `:57`, `javascript:` falls through, and `href=""` no longer resolves to the
+current page. It's correct in both directions, and that makes `Ctrl_Click_New_Tab` the only
+extension in here with no open defect.
 
-## What I'm proposing, and why in this order
+The `[QUICK WIN ~15min]` README item from that same list was **not** touched — `2d8b09f` is
+the only code commit since. It's still on the list, still 15 minutes.
 
-**The one that matters is `Ctrl_Click_New_Tab/content.js:39-40.`** I'd flagged the
-over-firing half last time; reading it properly this time, that single `return` is wrong in
-*both* directions, and one fix settles both. It intercepts plain `<a href>` links the browser
-already handles — and since native Ctrl+Click opens a *background* tab while `window.open`
-*focuses* the new one, this extension turns every ordinary Ctrl+Click on the entire web into
-a focus steal. Meanwhile the same early return **shadows the SPA fallbacks at `:42-54`**:
-`<a href="#" onclick="location.href='/x'">`, the exact pattern this extension was written
-for, matches `a[href]`, gets `null` from `toAbsoluteUrl("#")`, and returns before the
-`onclick` extraction is ever reached. It's ~4 lines to fix and it's running on `<all_urls>`,
-so it's the highest-value change in the repo by a distance.
+## What I found
 
-**Second, `Auto_Scroll_shorts/content.js:284`.** The overlay-button poll fires from a bare
-1300 ms interval and checks *no playback position at all* — not `currentTime`, not
-`duration`, not `ended`. It just finds a visible "Next Episode"-ish node and clicks it. The
-1200 ms debounce is shorter than the 1300 ms poll, so it never throttles anything. On a Goku
-series page that means it clicks ~1.3 s after load and chains through the series. But this
-needs a decision from you first: **`goku.sx` timed out again today** — second time in 12
-days. DNS resolves fine to Cloudflare and the stall is mid-TLS-handshake, so it's blocked
-from this machine rather than dead, and I can't tell from here whether it works for you. One
-browser tab settles it, and the answer changes the task completely: gate the poll behind
-end-of-playback if the site lives, or delete ~165 lines if it doesn't.
+**The top item is new, and it means one extension is broken most of the time.**
+`Waitlist_Display_Chrome/content.js:73` matches `/Est\.\s*wait:\s*(\d+)\s*person/i` — no
+`people` alternation. Firefox got this right at `content.js:5`. I ran both against four
+strings in node:
 
-**The quick win is the README.** `README.md:50` still tells you to load
-`Waitlist Display Firefox` with spaces, but `e495b44` renamed that folder to underscores back
-in May — so the single instruction a new user follows leads to a path that isn't there.
-`:33-36` documents a `Remove_Sponsors` extension that has never existed, and `:54-77` is a
-second todo list that now contradicts `todo.md`. Two control gaps are worth adding while
-you're in there: `Ctrl+Shift+Y` is the *only* way to turn auto-advance off and appears
-nowhere in the docs, and the README never says the speed panel is summoned by clicking the
-toolbar button.
+```
+"Est. wait: 1 person"               chrome= 1          firefox= 1
+"Est. wait: 2 people"               chrome= NO MATCH   firefox= 2
+"Est. wait: 12 people"              chrome= NO MATCH   firefox= 12
+"Est. Wait: 3 People ahead of you"  chrome= NO MATCH   firefox= 3
+```
 
-**Fourth, the Waitlist fork**, now with a sharper reason than "they've drifted": Chrome's
-regex at `content.js:73` is `person`-only, so **the Chrome build silently shows nothing the
-moment the queue reads "2 people"** — which is most of the time. Firefox has handled both
-since forever at `:5`. Chrome's observer is also still undebounced, doing a full-document
-text walk per mutation on a React app. Firefox, conversely, writes a bare digit with no
-`⏳`. One shared `content.js` — Firefox's scraper plus Chrome's title format and badge —
-copied into both folders. `mindvideo.ai` answered 200 today, so this is worth fixing.
+So the Chrome build — the one with the badge, the one that stays installed, since Firefox
+temporary add-ons die on restart — works only when exactly one person is ahead of you.
+Every other time it silently does nothing, which is the failure you'd never report: it just
+looks like the site isn't queueing you. Two-minute edit. Chrome's scraper is also the
+expensive one (undebounced observer at `:130-135`, full-subtree `textContent` off every
+`span, div, p, li` with no cap at `:69-77`) while Firefox has both fixes, so the task is
+"port Firefox's `extractWaitNumber` into Chrome, keep Chrome's ⏳ title and badge, copy the
+result back" — one file, two folders, no build tooling.
 
-**Fifth**, a rough edge you've probably been tolerating: the speed panel floats over the
-YouTube *homepage*. `manifest.json:17` matches all of `*.youtube.com` with no path gate and
-`createUI()` never checks that a `<video>` exists, so it decorates search, subscriptions and
-history too. One-line early return. While in there, `createUI`'s existence check at `:180`
-sits before an `await` and the append is at `:274` — two calls landing in that window build
-two panels and register the keydown handler twice, which is why `]` would step by 0.2x.
+**The speed controller forgets its own setting on every YouTube navigation.**
+`playback_speed_controller/content.js:344-358` applies `yts-saved-speed` exactly once, via a
+500 ms interval that clears itself on the first `<video>` it finds. YouTube navigates by
+History API; the content script doesn't re-run. Meanwhile the 1 s interval at `:328-341`
+reads `video.playbackRate` *into* the number input but never writes the saved speed back —
+so the panel's job, in code, is to watch your 2x get reset and faithfully display `1.00`.
+Honest caveat: YouTube sometimes reuses the same `<video>` node across watch pages, so the
+reset is inferred from the code path, not observed. Worth one browser tab before building it.
+If it turns out not to reset, the task collapses to the `<video>` gate — `manifest.json:17`
+matches all of `*://*.youtube.com/*` and `createUI()` never checks for a video, so the glass
+panel floats over the homepage, search and subscriptions too.
+
+**A race that produces an undismissable panel.** `createUI()`'s existence guard is at `:180`,
+the `await chrome.storage.local.get` at `:186`, the `appendChild` not until `:274`. The 1 s
+interval firing while you click the toolbar (which routes to `createUI()` at `:322`) gets two
+panels through the guard. Two consequences: the keydown handler registers inside `createUI`
+at `:293` so `]` starts stepping 0.2x, and `getElementById` returns only the first panel, so
+the toggle at `:312-320` can't dismiss the duplicate short of a reload. A `creatingUI` flag
+before the await fixes it in 15 minutes.
+
+**And a decision that isn't mine to make.** `goku.sx` timed out again today — `http_code
+000`, 12 s, zero bytes. That's three consecutive reviews across 25 days, with DNS resolving
+to Cloudflare every time and the stall mid-TLS-handshake, which reads as a network block
+rather than a dead domain. That's exactly why I can't settle it and Visesh can, in one tab.
+It's holding a real bug hostage: `Auto_Scroll_shorts/content.js:284` polls
+`tryClickNextOverlayButton` every 1300 ms with no check of `currentTime`, `duration` or
+`ended`, and `debounceReady()`'s 1200 ms window can't throttle a 1300 ms poll — so on a
+series page it clicks "Next Episode" ~1.3 s after arrival and walks the series in seconds.
+If the site loads, delete the `:284` call and leave `onPlaybackEnded` as the only caller. If
+it doesn't, delete the Goku half (`:121-286` plus the manifest match) and keep a clean
+~140-line Shorts auto-advancer. On three reviews of evidence, the second is likelier.
 
 ## Verdict
 
-Close to finished, and actually moving now. Four of five extensions are one small fix each
-from done. The honest open question is `Auto_Scroll_shorts`: half of it targets a host I
-can't reach, and if you can't either, the right move is deleting 165 lines rather than
-debugging them.
+Close to finished, and the loop is working — three fixes in two cycles. What's left is one
+broken feature, one unmade decision, and a surprising amount of docs debt: roughly half the
+remaining items are README, not code. The single install instruction in that file has pointed
+at a folder renamed back in May for two review cycles running, and it's the only thing
+standing between this and something another person could install. `mindvideo.ai` answered 200
+today, so the waitlist extension is still worth fixing. No dependency rot, no syntax rot —
+979 lines of vanilla JS and every remaining issue is logic, config or prose.

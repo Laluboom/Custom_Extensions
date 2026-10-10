@@ -1,181 +1,188 @@
 # TODOs
 
-_Ranked 2026-09-27. Two items from the 2026-09-15 list are **done**: the Waitlist Chrome
-observer loop (`8f99694`) and the playback_speed_controller toolbar icon (`753dca6`). Both
-were verified by the doer. What follows is what is genuinely left._
+_Ranked 2026-10-10. The headline item from the 2026-09-27 list is **done**: the
+`Ctrl_Click_New_Tab` anchor branch (`2d8b09f`) — I re-traced all four paths in the current
+code and it is correct in both directions now. The README item was marked
+`[QUICK WIN ~15min]` last cycle and **was not touched**; it is still here, still 15 minutes._
 
 ---
 
-### 1. `[DONE 2026-09-27]` The anchor branch in Ctrl_Click_New_Tab is wrong in both directions
+### 1. [BUG] The Chrome waitlist extension shows nothing once the queue says "2 people"
 
-`Ctrl_Click_New_Tab/content.js:39-40`:
+`Waitlist_Display_Chrome/content.js:73`:
 
 ```js
-const anchor = target.closest("a[href]");
-if (anchor) return toAbsoluteUrl(anchor.getAttribute("href") || anchor.href);
+const m = text.match(/Est\.\s*wait:\s*(\d+)\s*person/i);
 ```
 
-That single `return` causes two opposite defects, and one fix settles both.
+`person` with no alternation. Firefox got this right at `content.js:5`
+(`(?:person|people)`). Verified today in node against four realistic strings:
 
-**It over-fires on links the browser already handles.** On `<all_urls>`, every plain
-`<a href="/page">` gets routed through `window.open(url, "_blank", ...)` at `:58`. Native
-Ctrl+Click opens a **background** tab; `window.open` **focuses** the new tab. So the
-extension turns every ordinary Ctrl+Click on the entire web into a focus steal. The
-`noreferrer` in that same call also strips the `Referer` header on links that never asked
-for it.
-
-**It shadows the SPA fallbacks it was written for.** `<a href="#" onclick="location.href='/x'">`
-— the exact pattern this extension exists to fix — hits `:39`, matches `a[href]`, and
-`toAbsoluteUrl("#")` returns `null` (`:11` rejects `#`). The function then **returns null
-immediately** and never reaches the `onclick` / `data-href` extraction at `:42-54`. Same
-for `<a href="javascript:foo()">`, rejected at `:12`. And `<a href="">` is worse than
-useless: `getAttribute("href")` is `""` → falsy → falls back to `anchor.href`, which
-resolves to the *current* page, so you get a duplicate tab of where you already are.
-
-**Fix:** stop early-returning from the anchor branch. If the anchor has a real navigable
-href (non-empty, not `#`, not `javascript:`), return `null` and let the browser do what it
-already does correctly. Otherwise fall **through** to the `data-href`/`formaction`/`onclick`
-branch at `:42`. Net effect: no more focus steal on normal links, and `href="#"` SPA
-anchors finally work. This is ~4 lines and it is the single highest-value change in the repo.
-
-### 2. [BUG] Auto_Scroll_shorts chain-advances a Goku series on arrival, not at end-of-video
-
-`Auto_Scroll_shorts/content.js:284` calls `tryClickNextOverlayButton("overlay-poll")` from
-a bare `setInterval` every `GOKU.overlayClickRetryMs` = 1300 ms (`:17`, `:275-285`). Read
-`tryClickNextOverlayButton` at `:194-212`: its only guards are `enabled`,
-`isGokuSeriesPage()`, and `debounceReady()`. **Nothing checks playback position** — not
-`currentTime`, not `duration`, not `ended`. It just finds the first visible node matching
-`.next-episode, .btn-next, .next-ep, button[title*="Next" i], …` (`:196-204`) whose
-`textContent` matches `/next|episode/i` (`:206`) and clicks it.
-
-`debounceReady()` needs 1200 ms since the last advance (`:6`, `:26-28`) and the poll is
-1300 ms, so the debounce **never** blocks the poll. On any series page with a visible
-"Next Episode" control, this clicks ~1.3 s after load, lands on the next episode, and
-repeats — walking the whole series in seconds. The `ended` / near-end listeners at
-`:225-231` are the correct mechanism; the poll undermines them.
-
-**Fix, and the prerequisite:** `goku.sx` timed out from this machine again today
-(12 s, no bytes) — second consecutive review, 12 days apart. DNS is healthy and resolves
-to Cloudflare (`172.67.134.175`, `104.21.25.211`); the stall is mid-TLS-handshake, so this
-reads as Cloudflare refusing this network, **not** a dead site. You can settle it in one
-browser tab in five seconds, and that decides the work:
-
-- **If it loads for you:** gate the overlay poll behind end-of-playback. Only call
-  `tryClickNextOverlayButton` from `onPlaybackEnded` (`:214-218`), where it already
-  correctly lives as the fallback after `clickNextEpisode`. Delete the call at `:284` and
-  keep the rest of that interval (the re-binding at `:282-283` is still useful).
-- **If it does not:** delete the Goku half outright — roughly `:121-286` plus the
-  `https://goku.sx/*` match in `manifest.json:8`. That turns this into a clean ~140-line
-  Shorts auto-advancer, removes this bug, and removes the dead-host item below.
-
-### 3. [QUICK WIN ~15min] [DOCS] README's install steps point at a folder that no longer exists
-
-`README.md:50` tells you to load `Waitlist Display Firefox` — with spaces. Commit `e495b44`
-renamed every waitlist folder to underscores (`Waitlist_Display_Firefox`) back in May, so
-the one instruction a new user follows leads to a path that isn't there. `README.md:33-36`
-also documents a fifth extension, "Remove Sponsors (Placeholder) — Empty directory"; there
-is no `Remove_Sponsors/` in the tree and there never was (empty dirs don't survive git).
-
-Two more real gaps while you're in the file — both are controls with **no** documentation
-anywhere:
-
-- `Ctrl+Shift+Y` (`Auto_Scroll_shorts/content.js:302-309`) is the *only* way to turn
-  auto-advance off, and nothing in the README mentions it.
-- The README never says the speed panel is shown/hidden by **clicking the toolbar button**
-  (`playback_speed_controller/background.js:1`). It documents the panel's contents but not
-  how to summon it.
-
-Finally, collapse `README.md:54-77`. That "TODO List & Future Enhancements" block is a
-second, staler todo list that now contradicts this file (it still proposes the unified
-manager popup, which was dropped). Replace it with one line pointing at `todo.md`.
-
-### 4. [IMPROVEMENT] Retire the Waitlist Chrome/Firefox fork — Chrome silently fails on "2 people"
-
-Two hand-maintained copies that have drifted, and each has a fix the other lacks:
-
-| | Chrome | Firefox |
+| text | Chrome | Firefox |
 |---|---|---|
-| wait regex | `person` only (`content.js:73`) | `person\|people` (`content.js:5`) |
-| title format | `⏳ N` (`content.js:65`) | bare `N`, no marker (`content.js:31`) |
-| observer | undebounced, fires per mutation (`content.js:130-135`) | debounced 250 ms (`content.js:37-40`) |
-| scrape cost | every `span,div,p,li`, full-subtree `textContent` (`content.js:69-77`) | skips containers >3 children, caps text at 100 chars (`content.js:16-23`) |
-| url scope | all of `mindvideo.ai` (`manifest.json:12`) | `/text-to-video/*` only (`manifest.json:11`) |
-| badge | yes | no |
+| `Est. wait: 1 person` | `1` | `1` |
+| `Est. wait: 2 people` | **no match** | `2` |
+| `Est. wait: 12 people` | **no match** | `12` |
+| `Est. Wait: 3 People ahead of you` | **no match** | `3` |
 
-The consequences are concrete. **Chrome shows nothing the moment the queue says
-"2 people"** — `/…\s*person/i` does not match `people`, so the whole feature silently
-switches off above one person in line, which is most of the time. And Chrome's observer
-still calls `updateDisplay()` → `extractWaitNumber()` on *every single DOM mutation* with
-no debounce; the `8f99694` fix stopped the unbounded self-feeding loop, but on a React app
-that is still a full-document text walk per mutation. Firefox, meanwhile, puts a naked
-digit in the tab with no `⏳` marker, so you can't tell it apart from the site's own title.
+So the Chrome build — the one with the badge, the one actually installed permanently —
+works only when exactly one person is ahead of you. Every other time it silently does
+nothing, which is the failure mode you'd never file a bug about: it just looks like the
+site isn't queueing.
 
-**Fix:** write one `content.js` — Firefox's scraper (debounce, `person|people`, leaf-node
-skip, 5 s safety interval) plus Chrome's `⏳` title format and badge — and copy the same
-file into both folders. Two manifests, one script, no build tooling for two files. While in
-there: delete `Waitlist_Display_Chrome/service_worker.js` (it is two comment lines; MV3
-does not require a background script) along with its `manifest.json:17-19` block, and
-replace the placeholder Gecko id `queue-wait-tab-title@your-domain.com` at
-`Waitlist_Display_Firefox/manifest.json:18`.
+While you're in the file, port Firefox's other two scraper wins, because Chrome's version
+is also the expensive one:
 
-`mindvideo.ai` answered 200 today on both `/` and `/text-to-video/`, so this extension is
-still worth fixing.
+- **Debounce.** `:130-135` runs `updateDisplay()` → `extractWaitNumber()` on *every*
+  MutationObserver batch. `8f99694` stopped it feeding itself, but on a Next.js app that
+  is still a full-document text walk per mutation. Firefox wraps it in a 250 ms
+  `setTimeout` (`:37-40`).
+- **Leaf-node skip.** `:69-77` reads full-subtree `textContent` off every `span, div, p,
+  li` with no cap, so `<body>`'s entire text gets regex-tested first. Firefox skips nodes
+  with >3 children and caps text at 100 chars (`:16-23`).
 
-### 5. [IMPROVEMENT] The speed panel floats over the YouTube homepage, search, and subscriptions
+**Fix:** make `Waitlist_Display_Chrome/content.js` use Firefox's `extractWaitNumber` +
+`debouncedUpdate` verbatim, keeping Chrome's `⏳` title format (`:64-66`) and the badge.
+Then copy the merged scraper back into `Waitlist_Display_Firefox/content.js` and give it
+the `⏳` prefix it's missing at `:31` (right now Firefox writes a bare digit as the whole
+tab title, indistinguishable from the site's own). Same file, two folders, no build step.
+~40 min.
 
-`playback_speed_controller/manifest.json:17` matches `*://*.youtube.com/*` with no path
-restriction, and the 1 s interval at `content.js:328-341` calls `createUI()`
-unconditionally. `createUI`'s only guard is `if (document.getElementById(PANEL_ID)) return;`
-(`:180`) — it never checks that a `<video>` exists. So the glass panel is appended
-(`:274`) and, on a fresh install, rendered visible (`:195` defaults `isVisible` to true) on
-the homepage, search results, subscriptions, the history page: every YouTube surface where
-there is nothing to control. Compare `Auto_Scroll_shorts`, which correctly gates on
-`location.pathname.startsWith("/shorts/")`.
+### 2. `[QUICK WIN ~15min]` [DOCS] README still points the one install step at a folder that was renamed
 
-**Fix:** early-return from `createUI()` when `document.querySelector('video')` is null, and
-let the existing interval create the panel once a video appears. One line, and it stops the
-extension from decorating pages it has no business on.
+Carried from 2026-09-27 untouched. Four concrete wrongnesses in one file:
 
-Worth fixing in the same pass — the guard at `:180` is checked **before** the
-`await chrome.storage.local.get` at `:186`, but the panel is not appended until `:274`.
-Two `createUI()` calls landing inside that await window (the interval firing at the same
-moment you click the toolbar, which routes to `createUI()` at `:322`) both pass the guard
-and both append a panel — and the keydown handler is registered *inside* `createUI` at
-`:293`, so you get two listeners and `]` starts stepping speed by 0.2x. Set a
-module-level `creatingUI` flag before the await.
+- `README.md:50` — "Select the `manifest.json` file inside the `Waitlist Display Firefox`
+  folder." With spaces. `e495b44` renamed it to `Waitlist_Display_Firefox`. The single
+  instruction a new user follows leads to a path that doesn't exist.
+- `README.md:33-36` — documents a fifth extension, "Remove Sponsors (Placeholder) — Empty
+  directory." There is no `Remove_Sponsors/` in the tree and there can't be; git doesn't
+  track empty directories.
+- `README.md:54-77` — a second "TODO List & Future Enhancements" that contradicts this
+  file. It still proposes the unified manager popup that this file dropped. Replace the
+  whole block with one line pointing at `todo.md`.
+- **Two controls documented nowhere at all.** `Ctrl+Shift+Y`
+  (`Auto_Scroll_shorts/content.js:302-309`) is the *only* way to turn auto-advance off.
+  And the speed panel is shown/hidden by **clicking the toolbar button**
+  (`playback_speed_controller/background.js:1`) — the README lists the panel's contents
+  but never says how to summon it. Both are one line each.
+
+### 3. [IMPROVEMENT] The saved playback speed is forgotten on every YouTube SPA navigation
+
+`playback_speed_controller/content.js:344-358` applies `yts-saved-speed` **once**, via a
+500 ms `setInterval` that `clearInterval`s itself the moment it finds a `<video>` (and
+gives up after 10 s at `:356`). YouTube navigates by History API; the content script does
+not re-run. So the restore fires for the first video of the session and never again.
+
+The 1 s interval at `:328-341` is the other half of the problem — it reads
+`video.playbackRate` *into* the number input (`:336`) but never writes the saved speed
+*back* to the video. Net effect in code: set 2x on a lecture, click the next video, and
+the panel dutifully updates itself to show `1.00`. The extension watches your speed get
+reset instead of preventing it.
+
+Fold the two in while you're there, since they're the same "follow the actual video" idea:
+
+- **Gate on a `<video>` existing.** `createUI`'s only guard is
+  `if (document.getElementById(PANEL_ID)) return;` (`:180`) and `manifest.json:17` matches
+  `*://*.youtube.com/*` with no path restriction, so the glass panel is appended (`:274`)
+  and rendered visible (`:195` defaults `isVisible` true) over the homepage, search,
+  subscriptions and history. Compare `Auto_Scroll_shorts`, which correctly gates on
+  `location.pathname.startsWith("/shorts/")`.
+- **Re-apply on video change.** Track the last `<video>` element (or last pathname) in the
+  `:328` interval; when it changes, write `yts-saved-speed` to the new element.
+
+Behaviour is inferred from reading the code, not from a browser — YouTube sometimes reuses
+the same `<video>` node across watch pages, so confirm the 1x reset in a real tab first.
+If it does *not* reset, this task collapses to just the `<video>` gate (one line).
+
+### 4. [BUG] Two `createUI()` calls inside one await window build two panels, and only one is toggleable
+
+`playback_speed_controller/content.js`: the existence guard is at `:180`, the
+`await chrome.storage.local.get` is at `:186`, and `document.body.appendChild(panel)` is
+not until `:274`. Anything that calls `createUI()` twice inside that await window passes
+the guard twice. The realistic trigger: the 1 s interval at `:329` firing at the same
+moment you click the toolbar button, which routes to `createUI()` at `:322`.
+
+Two consequences, and the second is the annoying one:
+
+- The keydown handler is registered **inside** `createUI` at `:293`, so you get two
+  `document` listeners and `]` starts stepping speed by 0.2x.
+- `getElementById(PANEL_ID)` returns the *first* panel, so the toolbar toggle at
+  `:312-320` only ever touches that one. The duplicate stays on screen with no way to
+  dismiss it short of a reload.
+
+**Fix:** a module-level `let creatingUI = false` set before the `:186` await and cleared in
+a `finally`. ~15 min, independent of task 3.
+
+### 5. [DESIGN] Decide the Goku half — it has now been unreachable for 25 days
+
+`goku.sx` timed out from this machine again today: 12 s, zero bytes, `http_code 000`.
+That is **three consecutive reviews** (2026-09-15, 2026-09-27, 2026-10-10). DNS has
+resolved fine every time (Cloudflare) and the stall is mid-TLS-handshake, so this reads as
+Cloudflare refusing this network rather than a dead domain — which is exactly why I can't
+settle it and you can, in one browser tab.
+
+The bug waiting on that decision: `Auto_Scroll_shorts/content.js:284` calls
+`tryClickNextOverlayButton("overlay-poll")` from a bare `setInterval` every
+`GOKU.overlayClickRetryMs` = 1300 ms (`:17`, `:275-285`). Read the function at `:194-212` —
+its only guards are `enabled`, `isGokuSeriesPage()` and `debounceReady()`. **Nothing checks
+playback position**: not `currentTime`, not `duration`, not `ended`. It finds the first
+visible node matching `.next-episode, .btn-next, button[title*="Next" i], …` whose
+`textContent` matches `/next|episode/i` and clicks it. And `debounceReady()` needs 1200 ms
+(`:6`) against a 1300 ms poll, so the debounce never fires. On any series page with a
+visible "Next Episode" control this clicks ~1.3 s after arrival, lands on the next
+episode, and repeats — walking the series in seconds. The `ended` / near-end listeners at
+`:225-231` are the correct mechanism and the poll undermines them.
+
+- **If goku.sx loads for you:** delete the `:284` call and let `onPlaybackEnded` (`:214-218`)
+  be the only caller, where it already lives correctly as the fallback after
+  `clickNextEpisode`. Keep the rest of the interval — the re-binding at `:282-283` is still
+  doing work.
+- **If it doesn't:** delete the Goku half outright — roughly `:121-286` plus the
+  `https://goku.sx/*` match in `manifest.json:8`. That leaves a clean ~140-line Shorts
+  auto-advancer and removes this item permanently. On the evidence, this is the likelier
+  answer.
 
 ---
 
 ## Also confirmed, not scheduled
 
-- **Host-match vs. code-check mismatch** — `Auto_Scroll_shorts/manifest.json:8` matches only
+- **`Waitlist_Display_Chrome/service_worker.js` is two comment lines** and the
+  `manifest.json:17-19` `background` block that loads it is unnecessary under MV3. Both can
+  go; fold into task 1.
+- **The Gecko id is still the placeholder** `queue-wait-tab-title@your-domain.com`
+  (`Waitlist_Display_Firefox/manifest.json:18`). Harmless for a temporary add-on, but it's
+  the kind of thing that blocks a real signed build later.
+- **The two waitlist manifests disagree on scope** — Chrome matches all of
+  `https://www.mindvideo.ai/*` (`manifest.json:12`), Firefox only
+  `/text-to-video/*` (`:11`). Pick one. Both answered 200 today.
+- **Dead host checks in `Auto_Scroll_shorts`** — `manifest.json:8` matches only
   `https://www.youtube.com/*` and `https://goku.sx/*`, but `content.js:31` and `:36` accept
-  any `youtube.com` / `*.goku.sx` host. On `m.youtube.com` or `www.goku.sx` the script never
-  loads, so those permissive checks are unreachable. Note `:31`'s second clause
-  (`location.hostname !== "www.youtube.com"`) is dead regardless: `/youtube\.com$/` already
-  matches `www.youtube.com`.
-- **`[href]` is redundant in the fallback selector** at `Ctrl_Click_New_Tab/content.js:42` —
-  `a[href]` is already consumed by `:39`, so that token only ever catches non-anchor
-  elements carrying an `href`. Harmless, but it reads as though it does more than it does.
-- **All 7 JS files pass `node --check`** (2026-09-27). There is no syntax rot; every issue
-  above is logic or config.
+  any `youtube.com` / `*.goku.sx` host, so those branches are unreachable. `:31`'s second
+  clause (`location.hostname !== "www.youtube.com"`) is dead regardless — `/youtube\.com$/`
+  already matches it.
+- **`[href]` is redundant** in the fallback selector at `Ctrl_Click_New_Tab/content.js:45`:
+  `a[href]` is consumed at `:39-43`, so that token only ever catches non-anchor elements
+  carrying an `href`. Reads as though it does more than it does.
+- **All 7 JS files pass `node --check`** (2026-10-10). No syntax rot. Everything above is
+  logic or config.
 
 ## Future ideas
 
-- **Popup toggle for Auto_Scroll_shorts** — `Ctrl+Shift+Y` (`content.js:302`) is the only
-  way to disable it and nothing surfaces the current state. The `enabled` flag already
-  persists in `chrome.storage.local`, so a one-checkbox popup is ~10 lines of HTML.
-- **Per-site / per-format speed memory** — `playback_speed_controller` stores one global
-  `yts-saved-speed` (`content.js:4`), so the 2x you set for a lecture follows you into
-  Shorts. Key it by hostname, or by shorts-vs-watch. Pairs naturally with task 5.
-- **Re-apply saved speed across SPA navigation** — the restore at `content.js:344-358` runs
-  once on load and stops after the first video it finds. YouTube navigates without
-  re-running the content script, so the 1 s interval at `:328` only *reads* `playbackRate`
-  into the input; it never re-applies your saved speed to the next video. Unverified in a
-  real browser, but the code path is plainly one-shot.
-- **SponsorBlock-based sponsor skipper** — genuinely a new extension, not a task. Would
-  start with a `fetch` to `sponsor.ajay.app` for the current video id. Note the README has
-  advertised this as an existing placeholder folder for months; see task 3.
+- **`Ctrl_Click_New_Tab` ignores middle-click.** `isCtrlLeftClick` (`:4-6`) requires
+  `button === 0`, and the listener is on `click` (`:65`) — middle-click fires `auxclick`
+  with `button === 1`. Middle-click is the more common new-tab gesture and the whole
+  extraction pipeline at `:36-58` already works; this is an `auxclick` listener and one
+  predicate. Ctrl+Shift+Click is excluded too (`!event.shiftKey`).
+- **The speed panel can be dragged off-screen permanently.** `makeDraggable` (`:156-169`)
+  clamps nothing, and `closeDragElement` persists `top`/`left` to `yts-panel-pos` (`:174`).
+  Drag it past the viewport edge and it's gone across every reload with no reset in the UI —
+  the toolbar button only toggles `hidden`. A clamp to `window.inner*` on restore would do.
+- **Per-site speed memory** — one global `yts-saved-speed` (`:4`), so the 2x you set for a
+  lecture follows you into Shorts. Pairs with task 3.
+- **Popup toggle for `Auto_Scroll_shorts`** — `Ctrl+Shift+Y` is the only off switch and
+  nothing surfaces the current state. `enabled` already persists in `chrome.storage.local`,
+  so this is ~10 lines of HTML.
 - ~~Unified extension manager popup~~ — dropped. Five independent extensions that each do
-  one thing do not need a shared messaging contract; that is more surface area than the
-  suite has.
+  one thing don't need a shared messaging contract.
+- ~~`Ctrl_Click_New_Tab` anchor branch~~ — **done**, `2d8b09f`.
