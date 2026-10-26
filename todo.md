@@ -11,7 +11,7 @@ it is the thing actually standing between this repo and "finished"._
 
 ---
 
-### 1. [DOCS] The one install instruction a new machine follows points at a folder that no longer exists
+### 1. `[DONE 2026-10-26]` The one install instruction a new machine follows points at a folder that no longer exists
 
 `README.md` is the restore procedure for this repo. It has four concrete wrongnesses:
 

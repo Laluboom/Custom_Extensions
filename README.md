@@ -14,12 +14,13 @@ A collection of utility browser extensions for YouTube, Goku Series, and general
   - **Hotkeys:**
     - `[`: Decrease speed by 0.1x.
     - `]`: Increase speed by 0.1x.
+  - Click the toolbar button to show or hide the floating panel.
 - **Security:** Uses `chrome.storage.local` for persistence and secure DOM manipulation.
 
 ### 2. Auto-Advance (YouTube Shorts + Goku Series)
 - **Description:** Automatically moves to the next video on supported platforms.
 - **Platforms:** `youtube.com/shorts`, `goku.sx`.
-- **Usage:** Ideal for hands-free viewing of short-form content or series.
+- **Usage:** Ideal for hands-free viewing of short-form content or series. Press `Ctrl+Shift+Y` to turn auto-advance off (and back on).
 
 ### 3. Ctrl Click Opens New Tab
 - **Description:** Forces `Ctrl + Left Click` to open links in a new tab, even on sites with custom SPA routing that usually breaks this behavior.
@@ -30,9 +31,10 @@ A collection of utility browser extensions for YouTube, Goku Series, and general
 - **Versions:** Separate builds for Chrome (Manifest V3) and Firefox.
 - **Usage:** Monitor your queue position without keeping the tab active.
 
-### 5. Remove Sponsors (Placeholder)
-- **Status:** Empty directory.
-- **Goal:** Future extension to identify and skip sponsor segments in videos.
+---
+
+## Future ideas
+- **SponsorBlock:** Research the SponsorBlock API for identifying and skipping sponsor segments in videos.
 
 ---
 
@@ -47,30 +49,8 @@ A collection of utility browser extensions for YouTube, Goku Series, and general
 ### For Firefox:
 1. Open `about:debugging#/runtime/this-firefox`.
 2. Click **Load Temporary Add-on...**.
-3. Select the `manifest.json` file inside the `Waitlist Display Firefox` folder.
+3. Select the `manifest.json` file inside the `Waitlist_Display_Firefox` folder.
 
 ---
 
-## TODO List & Future Enhancements
-
-### General
-- [ ] Implement a unified "Custom Extension Manager" popup to toggle all extensions from one place.
-- [ ] Add `i18n` support for multiple languages.
-- [ ] Standardize all icons across the suite.
-
-### Playback Speed Controller
-- [ ] Add more preset speed pills (e.g., 2.5x, 5.0x).
-- [ ] Allow users to customize hotkeys in the options page.
-- [ ] Smooth transition animations for the UI panel.
-
-### Auto-Advance
-- [ ] Add a "Toggle On/Off" button in the extension popup.
-- [ ] Support more streaming platforms (e.g., Netflix, Prime Video).
-
-### Remove Sponsors
-- [ ] **Research:** Look into the SponsorBlock API for skipping segments.
-- [ ] Implement basic skip logic for known patterns.
-
-### Queue Wait Display
-- [ ] Merge Chrome and Firefox versions into a single cross-browser codebase using a build script.
-- [ ] Support custom site lists via an options menu.
+See todo.md.
