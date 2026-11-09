@@ -39,6 +39,7 @@
         border-radius: 8px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         z-index: 99999;
+        pointer-events: none;
         display: flex;
         align-items: center;
         gap: 10px;
@@ -130,10 +131,9 @@
       if (isDisplayVisible) {
         displayElement.classList.remove("visible");
         isDisplayVisible = false;
-        // Optional: hide element after transition
-        // setTimeout(() => {
-        //   if (!isDisplayVisible) displayElement.style.display = 'none';
-        // }, 300);
+        setTimeout(() => {
+          if (!isDisplayVisible) displayElement.style.display = "none";
+        }, 300);
       }
     }
   }

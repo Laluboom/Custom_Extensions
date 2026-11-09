@@ -10,7 +10,7 @@ these are unbundled content scripts with no toolchain, which is why this repo ke
 
 ---
 
-### 1. `[QUICK WIN ~15min]` [BUG] The Chrome waitlist badge turns into an invisible click-trap once the queue clears
+### 1. `[DONE 2026-11-09]` [BUG] The Chrome waitlist badge turns into an invisible click-trap once the queue clears
 
 Proposed last cycle, not taken. It is still the only bug here with live impact —
 `mindvideo.ai` answered 200 on both `/` and `/text-to-video/` today, so this is a site you
