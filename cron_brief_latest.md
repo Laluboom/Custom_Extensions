@@ -1,97 +1,86 @@
-# Daily brief — Custom_Extensions (2026-10-26)
+# Custom_Extensions — daily review, 2026-11-09
 
 ## What I looked at
 
-All 15 files: the seven JS files, all five manifests, `README.md`, and the previous `todo.md` /
-`reference.md`. `node --check` on every JS file (all pass). Live HTTP checks against `goku.sx`
-and both `mindvideo.ai` paths, and I pulled down the `/text-to-video/` HTML to see whether the
-string the waitlist scraper hunts for is even in the markup.
+All 16 tracked files: every `manifest.json`, all 7 JS files, the README, the previous `todo.md`
+and `.gitignore`. Read the full source of `Auto_Scroll_shorts/content.js` (312 lines) and
+`playback_speed_controller/content.js` (359 lines) rather than skimming, and diffed the two
+waitlist copies against each other line by line. Ran `node --check` on all 7 JS files — all pass.
 
-**No browser check.** These are five unpacked extensions, not a web app — there is no dev server
-to serve and a headless Chrome can't meaningfully load an unpacked extension and drive YouTube.
-What I did instead was the live HTTP work above, which is where the useful finding came from.
+No browser render: these are unpacked extensions with no dev server to point Chrome at. What I
+did instead was check the two hosts they depend on over HTTP, and scan the served `mindvideo.ai`
+HTML for the queue wording the scraper is built around.
 
-## The headline: last cycle's top item actually landed
+## What I found
 
-`8cf9e9f` fixed the Chrome waitlist regex. Both copies now share
-`/Est\.\s*wait:\s*(\d+)\s*(?:person|people)/i`, the 250 ms debounce, the leaf-node skip, the
-100-char cap and the `⏳` prefix. I re-read both files; it's a genuine merge, not a patch. That
-was the only thing in this repo that was outright broken, which changes the character of the
-review: **nothing here fails to do its job any more.** What's left is polish and one decision.
+**Last cycle's headline item is done.** `8f538dd` fixed the README — the Firefox install path
+(which pointed at a folder renamed in `e495b44`), the phantom fifth "Remove Sponsors" extension,
+the contradictory second TODO block, and the two controls documented nowhere (`Ctrl+Shift+Y`, and
+the fact that the toolbar button is what summons the speed panel). That item had been proposed
+three cycles running. With it gone, nothing stands between these five extensions and someone else
+installing them, which was the biggest real gap in this repo.
 
-## What I found that's new
+**The one live bug is still the Chrome waitlist badge.** Proposed last cycle, not taken, and it
+got more interesting on a second read. `Waitlist_Display_Chrome/content.js:130-137` hides the
+badge by removing a class that controls only `opacity` and `transform` — the **inline**
+`display = "flex"` set at `:117` is never reverted, and the base CSS at `:29-48` sets no
+`pointer-events`. So once your queue clears you're left with an invisible, `position: fixed`,
+`z-index: 99999` box in the bottom-right corner of `mindvideo.ai` that still hit-tests and
+silently eats clicks.
 
-**The Chrome badge is an invisible click-trap.** This is the quick win, and it's the kind of bug
-you'd never file — you'd just assume the site was being weird. `content.js:130-137` hides the
-badge by removing the `visible` class, but that class only controls `opacity` and `transform`.
-The inline `display = "flex"` set at `:117` is never put back (the restore is sitting there
-commented out at `:133-136`), and the base CSS rule has no `pointer-events`. So once the queue
-drains you're left with a `position: fixed`, `opacity: 0`, `z-index: 99999` box pinned to the
-bottom-right corner of `mindvideo.ai`, invisible and still hit-testable. Two lines fixes it, and
-the same fix kills a second symptom: the badge's own text `" Est. Wait: "` lives in
-`document.body`, so it permanently defeats the cheap `innerText` guard at `:72` that exists to
-avoid the DOM walk. Once the badge has been shown once, every mutation batch does the full walk
-for the rest of the page's life.
+The part I'd missed before is that this has a *second* symptom from the same cause. The cheap
+guard at `:72` (`document.body.innerText.includes("wait:")`) exists to skip the DOM walk at
+`:75`. The badge's own text node `" Est. Wait: "` (built at `:20`) is in `document.body` — while
+the badge is `display: none` it's excluded from `innerText`, but the moment `:117` flips it to
+`flex` it counts, and since the hide path never flips it back, the guard never short-circuits
+again. Every debounced mutation batch runs the full `querySelectorAll("span, div, p, li")` walk
+forever. Uncommenting the `display = "none"` timeout fixes both. Two lines.
 
-**Nobody has ever verified the string the scraper looks for.** `/text-to-video/` serves 189 KB
-of HTML and contains no case-insensitive match for "wait" anywhere — the only "queue" hits are
-inside the Twitter ads pixel. The queue UI is client-rendered, so `Est. wait: N person` is a
-guess that happens to have survived four reviews unexamined. The regex needs the period *and*
-the colon. I've asked for a thirty-second thing: next time you're actually sitting in a queue,
-paste the real node text into a comment above `WAIT_REGEX`.
+**`goku.sx` failed for the fifth consecutive review** — 12 s, `http_code 000`, zero bytes,
+stalling mid-TLS-handshake. That's 09-15, 09-27, 10-10, 10-26 and today. Previous cycles framed
+this as a fork for the owner to settle; five data points is enough that I'm now recommending the
+deletion outright. What makes it worth acting on is the bug it's blocking:
+`Auto_Scroll_shorts/content.js:284` polls `tryClickNextOverlayButton` every 1300 ms with **no
+playback-position check at all** (read `:194-212` — it guards only `enabled`,
+`isGokuSeriesPage()` and `debounceReady()`), and the 1200 ms debounce at `:6` is shorter than the
+1300 ms poll, so it can never gate. On any series page with a visible "Next Episode" control this
+walks the entire series in seconds, actively undermining the correct `ended`/near-end listeners
+at `:225-231`.
 
-**The two waitlist copies drifted again, in the other direction.** `8cf9e9f` unified the
-scraper, but Firefox never got Chrome's `lastTitle` guard. `Firefox/content.js:29-35` writes
-`ORIGINAL_TITLE` back unconditionally whenever it can't find a number; Chrome at `:125-127` only
-restores if it was the one that set the title. On a Next.js SPA that sets `document.title` per
-route, the Firefox copy pins your tab to whatever the title was at `document_idle` and
-re-asserts it every five seconds.
+**I tried and failed to verify `WAIT_REGEX`, which is worth flagging as a finding in itself.**
+Both waitlist copies hinge on `/Est\.\s*wait:\s*(\d+)\s*(?:person|people)/i`. `mindvideo.ai`
+answered 200 on both `/` and `/text-to-video/` today, but the served HTML (193 KB) contains no
+"wait", "queue", "people ahead" or "person ahead" string anywhere — the queue UI is
+client-rendered behind auth. So the exact format `Est. wait: N person` has never been confirmed
+against the live DOM by anyone, and the regex needs the period *and* the colon to match. The
+entire function of two extensions rests on an unverified string that only the owner can check.
 
-## The thing I'm being blunt about
+## What I'm proposing
 
-**`README.md:50` has now been proposed three cycles running** — 2026-09-27, 2026-10-10, today —
-and never touched. It was labelled `[QUICK WIN ~15min]` twice. Proposing it a third time
-identically would be theatre, so this time it's **task #1** and not the quick win.
+1. **[QUICK WIN ~15min]** The badge click-trap — two lines, kills both symptoms. While you're in
+   there and sitting in a real queue, paste the actual node text into a comment above
+   `WAIT_REGEX`.
+2. **[DESIGN]** Delete the Goku half (~165 lines plus the manifest match and config block). The
+   one-line fallback if it actually loads for you: delete just the `:284` call.
+3. **[IMPROVEMENT]** Make the speed controller follow the video — it applies the saved speed once
+   per injection (`:344-358`) and YouTube navigates by History API, so the panel updates itself
+   to display `1.00` rather than preventing the reset. Plus gate `createUI` on a `<video>`
+   existing, so it stops floating over the homepage and search.
+4. **[IMPROVEMENT]** Finish converging the waitlist pair — the Firefox copy still clobbers the
+   SPA's own tab titles (no `lastTitle` guard), Chrome still ships a dead service worker, the
+   manifests disagree on scope, and the Gecko id is a placeholder.
+5. **[CHORE]** Five small confirmed wrongnesses in one pass, including the slider that lies above
+   4x and a `hostname.endsWith("youtube.com")` that also accepts `notyoutube.com`.
 
-The reason to care isn't tidiness. This README *is* the restore procedure for this repo, and its
-single executable instruction tells you to select a folder called `Waitlist Display Firefox` —
-with spaces — which `e495b44` renamed in May. It also documents an extension that doesn't exist
-(`Remove_Sponsors`, lines 33-36), carries a second TODO list that contradicts `todo.md`, and
-never mentions the two controls that aren't discoverable any other way: `Ctrl+Shift+Y` is the
-*only* off switch for auto-advance, and the speed panel is summoned by clicking the toolbar
-button. Fifteen minutes, no code touched, and it's the difference between five extensions
-anyone can install and five folders only you know how to load.
+## Honest read
 
-## Also proposing
+This repo is in good shape and is being genuinely worked, not just re-reviewed — two of the last
+two cycles' tasks actually landed (`8cf9e9f`, `8f538dd`). There's no rot to fight: no
+dependencies, no build, no bundler, so nothing expires except the sites these scripts target.
+That's exactly why the remaining backlog is all logic and config.
 
-**The speed controller forgetting its own setting** is the biggest day-to-day rough edge. The
-saved speed is applied exactly once per injection via a self-clearing interval (`:344-358`), and
-YouTube navigates by History API so the script never re-runs. Meanwhile the 1 s interval at
-`:328-341` reads `playbackRate` *into* the input but never writes the saved value back — so the
-panel dutifully updates itself to show `1.00` when YouTube resets you. It watches your speed get
-reset instead of preventing it. Worth five seconds of checking in a real tab first, since
-YouTube sometimes reuses the same `<video>` node; if it doesn't reset for you, the task collapses
-to just gating the panel on a video existing (one line, and it stops the glass panel floating
-over the homepage and search).
-
-**The Goku half should probably go.** `goku.sx` timed out again today — 12 s, zero bytes,
-`http_code 000`. That's four consecutive reviews, with DNS resolving to Cloudflare every time
-and the stall mid-TLS-handshake, so it reads as a network block rather than a dead domain. You
-can settle in one browser tab what I've now failed to settle four times. The bug waiting on it
-is real: the 1300 ms overlay poll at `Auto_Scroll_shorts/content.js:284` checks no playback
-position at all, and the 1200 ms debounce can't throttle a 1300 ms poll, so on any series page
-with a visible "Next Episode" control it clicks ~1.3 s after arrival and walks the whole series
-in seconds — actively undermining the correct `ended`/near-end listeners twenty lines above.
-Deleting the Goku half leaves a clean ~140-line Shorts auto-advancer.
-
-## One correction to last cycle
-
-I'm **downgrading the duplicate-panel race** that was task 4 on 2026-10-10. The flaw is real —
-the existence guard at `:180` sits before an `await` and the `appendChild` isn't until `:274` —
-but I overstated the trigger. The only two callers are a 1 s interval and the toolbar message, so
-the collision window is the ~1 ms of a single `chrome.storage.local.get`; it needs a click landing
-inside that millisecond. It's now in "also confirmed, not scheduled" with a note to fold the
-`creatingUI` flag in if you're already in that file for task 3.
-
-**Verdict: nearly finished.** No dependency rot, no syntax rot, nothing that needs scaffolding.
-One stale doc, three sub-hour bugs, one decision. Two or three focused sessions from done.
+The single thing that would make this *finished* is removing the Goku half. It's the only part of
+the codebase that can't be verified, can't be tested, and carries a known destructive bug — and
+it's the only item that keeps regenerating in this file every cycle. Deleting it leaves a clean
+~140-line Shorts auto-advancer and takes this repo to five extensions that all work and are all
+documented. Everything else on the list is polish.
